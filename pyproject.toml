@@ -12,6 +12,10 @@ pypipeline = { file = "deps/pypipeline-0.0.0-py3-none-any.whl" }
 
 # External dependencies
 python = "^3.10"
+torch = "^2.1.0"
+torchvision = "^0.16.0"
+openmim = "^0.3.9"
+ipykernel = "^6.26.0"
 
 
 [build-system]
