@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "workout-verify"
+version = "0.1.0"
+description = ""
+authors = ["Justin Regef & Patrick Tourniaire"]
+readme = "README.md"
+packages = [{include = "workout_verify"}]
+
+[tool.poetry.dependencies]
+# Local wheel dependencies
+pypipeline = { file = "deps/pypipeline-0.0.0-py3-none-any.whl" }
+
+# External dependencies
+python = "^3.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
