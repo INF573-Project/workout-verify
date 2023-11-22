@@ -1,9 +1,10 @@
 from pypipeline.schemas.fields import field_persistance
 from pypipeline.schemas import BaseSchema
 from dataclasses import dataclass
+from typing import List
 
 
 @dataclass
 class DataStageJoints(BaseSchema):
-    joint_angles: dict = field_persistance()
-    joint_angles_decomposed: dict = field_persistance()
+    kpts_detailed: List[dict] = field_persistance()
+    video_output_path: str = field_persistance()
