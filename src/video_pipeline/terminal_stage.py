@@ -7,6 +7,7 @@ import numpy as np
 from collections import defaultdict
 from typing import Tuple, List
 from rich import print
+import json
 
 # Local imports
 from .schemas.data_terminal_stage import DataStageTerminal
@@ -49,12 +50,6 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
         return groups
     
 
-
-    """
-    TODO: change this such that it is generalised for all joints which are relevant.
-
-    """
-    
     def get_rep_points(self, joints_history: dict) -> dict:
         kr = np.array(self.simple_moving_average(joints_history["knee_right"], 10))
         kl = np.array(self.simple_moving_average(joints_history["knee_left"], 10))
@@ -102,17 +97,67 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
 
         return reps
     
-    def validate_reps(self, extremas: List[dict]):
-        rep_count = 0
+    def validate_reps_squat(self, cyclic_extremas: List[dict], pos_dep_joints: dict):
+        good_reps = defaultdict(dict)
         
-        for rep_dict in extremas:
+        for rep_dict in cyclic_extremas:
             if 'bottom' not in rep_dict:
-                print(f"[bold red] You did not go far enough down for rep number {rep_dict['rep']}")
+                good_reps[rep_dict['rep']] = {
+                    'valid': False,
+                    'advice': {
+                        'knees_bottom': {
+                            'angle': 21,
+                            'expected': squat_rules["knee_right"]["min"]
+                        }
+                    }
+                }
             else:
-                rep_count += 1
-                print(f"[bold green] You completed a successfull rep on number {rep_dict['rep']}")
+                for joint in pos_dep_joints:
+                    top_pos = pos_dep_joints[joint][rep_dict['top']]
+                    bottom_pos = pos_dep_joints[joint][rep_dict['bottom']]
+
+                    if squat_rules[joint]['min'] >= top_pos:
+                        valid_top = True
+                        if 'valid' in good_reps[rep_dict['rep']]:
+                            valid_top = False if good_reps[rep_dict['rep']]['valid'] == False else True
+                    else:
+                        valid_top = False
+                    
+                    advice_top = {} if valid_top else {
+                        f'{joint}_top': {
+                            'position': 'top',
+                            'angle': top_pos,
+                            'expected': squat_rules[joint]['min']
+                        },
+                        **(good_reps[rep_dict['rep']]['advice'] if 'advice' in good_reps[rep_dict['rep']] else {})
+                    }
+                    good_reps[rep_dict['rep']] = {
+                        'valid': valid_top,
+                        'advice': advice_top
+                    }
+                    
+                    if abs(squat_rules[joint]['max'] - bottom_pos) <= 7:
+                        valid_bottom = True
+                        if 'valid' in good_reps[rep_dict['rep']]:
+                            valid_bottom = False if good_reps[rep_dict['rep']]['valid'] == False else True
+                    else:
+                        valid_bottom = False
+                    
+                    advice_bottom = {} if valid_bottom else {
+                        f'{joint}_bottom': {
+                            'position': 'bottom',
+                            'angle': bottom_pos,
+                            'expected': squat_rules[joint]['max']
+                        },
+                        **(good_reps[rep_dict['rep']]['advice'] if 'advice' in good_reps[rep_dict['rep']] else {})
+                    }
+                    good_reps[rep_dict['rep']] = {
+                        'valid': valid_bottom,
+                        'advice': advice_bottom
+                    }
+            
         
-        print(f"\n[bold magenta] You performed a total of {rep_count} reps")
+        print(f"\n[bold magenta] You performed the following reps correctly:\n{json.dumps(dict(good_reps), indent=4)}")
 
 
     def compute(self) -> None:
@@ -129,7 +174,13 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
         
         start_points, end_points = self.get_rep_points(joints_history)
         rep_extremas = self.reparameterise_rep_points(start_points, end_points)
-        self.validate_reps(rep_extremas)
+        self.validate_reps_squat(
+            rep_extremas,
+            {
+                "hip_left": joints_history["hip_left"],
+                "hip_right": joints_history["hip_right"]
+            }
+        )
 
         for joint_name in joints_history:
             plt.figure()
