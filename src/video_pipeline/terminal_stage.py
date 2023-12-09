@@ -93,7 +93,7 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
                 reps.append({"rep": i, "top": point})
                 continue
                 
-            reps.append({"rep": i, "top": point, "bottom": bottom})
+            reps.append({"rep": i, "top": point, "bottom": next_bottom})
 
         return reps
     
@@ -116,7 +116,7 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
                     top_pos = pos_dep_joints[joint][rep_dict['top']]
                     bottom_pos = pos_dep_joints[joint][rep_dict['bottom']]
 
-                    if squat_rules[joint]['min'] >= top_pos:
+                    if squat_rules[joint]['min'] <= top_pos:
                         valid_top = True
                         if 'valid' in good_reps[rep_dict['rep']]:
                             valid_top = False if good_reps[rep_dict['rep']]['valid'] == False else True

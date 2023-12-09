@@ -29,7 +29,7 @@ class ForwardStageInference(IForwardStage[DataStageOutputLoad, DataStageInferenc
 
         cap.release()
         return np.array(frames)
-    
+
     def process_slice(self, slice_data, inferencer):
         kpts = []
 
