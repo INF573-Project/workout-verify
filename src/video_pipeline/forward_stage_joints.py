@@ -122,18 +122,20 @@ class ForwardStageJoints(IForwardStage[DataStageInference, DataStageJoints, Term
             (np.degrees(thetax) + 360) % 360
         )
 
-
     def spine_hinge(self, kpts_dict: dict) -> tuple:
         v_1 = kpts_dict['hips']
         v_2 = kpts_dict['spine_middle']
-        v_0 = np.array([v_1[0], v_1[1], v_2[2]])
+        
+        p_1 = np.array([1, 0, v_1[2]])
+        p_2 = np.array([0, 1, v_1[2]])
+        v_3 = np.cross(p_1, p_2)
 
         Z, X, Y = self.decompose_rotation_matrix(
-            self.get_rotation_matrix((v_0 - v_1), (v_2 - v_1))
+            self.get_rotation_matrix((v_3 - v_1), (v_2 - v_1))
         )
         result = {'X': X, 'Y': Y, 'Z': Z}
 
-        return result
+        return result, self.angle_between((v_3 - v_1), (v_2 - v_1))
 
     def compute_joint_angles(self, structure: dict, kpts_dict: dict) -> dict:
         kpts_dict['joint_angles'] = defaultdict(float)
@@ -153,6 +155,12 @@ class ForwardStageJoints(IForwardStage[DataStageInference, DataStageJoints, Term
                     v_2 = kpts_dict[joint_vertices[2]]
 
                     joint_angle = self.angle_between((v_0 - v_1), (v_2 - v_1))
+                    if joint_vertices[1] == 'spine_middle':
+                        joint_angle = 180 - joint_angle
+                    
+                    if joint_vertices[1] in ['hip_left', 'hip_right']:
+                        joint_angle -= 90
+
                     kpts_dict['joint_angles'][joint_vertices[1]] = joint_angle
 
                     Z, X, Y = self.decompose_rotation_matrix(
@@ -163,8 +171,10 @@ class ForwardStageJoints(IForwardStage[DataStageInference, DataStageJoints, Term
                     kpts_dict['joint_angles_decomposed'][joint_vertices[1]]['Z'] = Y
 
                     joint_vertices.pop(0)
-            
-        kpts_dict['joint_angles_decomposed']['spine_hinge'] = self.spine_hinge(kpts_dict)
+        
+        decomposed_spine_hinge, spine_hinge = self.spine_hinge(kpts_dict)
+        kpts_dict['joint_angles_decomposed']['spine_hinge'] = decomposed_spine_hinge
+        kpts_dict['joint_angles']['spine_hinge'] = spine_hinge
 
         return kpts_dict
 

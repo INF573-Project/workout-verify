@@ -165,3 +165,4 @@ poetry.lock
 # Other
 mmpose/
 inspiration/
+data/examples/*.MOV
