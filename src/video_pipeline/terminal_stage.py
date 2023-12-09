@@ -12,13 +12,18 @@ import json
 # Local imports
 from .schemas.data_terminal_stage import DataStageTerminal
 from .schemas.data_stage_joints import DataStageJoints
-from src.utils.workout_rules import squat_rules
+from src.utils.workout_rules import squat_rules, pullup_rules
+from src.utils.workout_rules import squat_cyclic_pair, pullup_cyclic_pair
 
 
 class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
 
     def __init__(self) -> None:
         super().__init__()
+        self.is_squat = True
+
+        self.ruleset = squat_rules if self.is_squat else pullup_rules
+        self.cyclic_pair = squat_cyclic_pair if self.is_squat else pullup_cyclic_pair
 
     def simple_moving_average(self, data, window_size):
         if window_size <= 0:
@@ -51,12 +56,12 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
     
 
     def get_rep_points(self, joints_history: dict) -> dict:
-        kr = np.array(self.simple_moving_average(joints_history["knee_right"], 10))
-        kl = np.array(self.simple_moving_average(joints_history["knee_left"], 10))
+        kr = np.array(self.simple_moving_average(joints_history[self.cyclic_pair[0]], 10))
+        kl = np.array(self.simple_moving_average(joints_history[self.cyclic_pair[1]], 10))
 
         knee_history = (kr + kl) / 2
-        maximas = np.argwhere(knee_history >= squat_rules["knee_right"]["max"])
-        minimas = np.argwhere(knee_history <= squat_rules["knee_right"]["min"])
+        maximas = np.argwhere(knee_history >= self.ruleset[self.cyclic_pair[0]]["max"])
+        minimas = np.argwhere(knee_history <= self.ruleset[self.cyclic_pair[1]]["min"])
 
         starting_points = []
         end_points = []
@@ -97,63 +102,78 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
 
         return reps
     
-    def validate_reps_squat(self, cyclic_extremas: List[dict], pos_dep_joints: dict):
+    def validate_reps_squat(self, cyclic_extremas: List[dict], pos_dep_joints: dict, joints_history: dict):
         good_reps = defaultdict(dict)
         
         for rep_dict in cyclic_extremas:
             if 'bottom' not in rep_dict:
-                good_reps[rep_dict['rep']] = {
-                    'valid': False,
-                    'advice': {
-                        'knees_bottom': {
-                            'angle': 21,
-                            'expected': squat_rules["knee_right"]["min"]
+                if self.is_squat:
+                    good_reps[rep_dict['rep']] = {
+                        'valid': False,
+                        'advice': {
+                            'knees_bottom': {
+                                'expected': self.ruleset["knee_right"]["min"]
+                            }
                         }
                     }
-                }
+                else:
+                    good_reps[rep_dict['rep']] = {
+                        'valid': False,
+                        'advice': {
+                            'elbows_top': {
+                                'expected': self.ruleset["elbow_right"]["min"]
+                            }
+                        }
+                    }
             else:
-                for joint in pos_dep_joints:
-                    top_pos = pos_dep_joints[joint][rep_dict['top']]
-                    bottom_pos = pos_dep_joints[joint][rep_dict['bottom']]
+                if len(pos_dep_joints) > 0:
+                    for joint in pos_dep_joints:
+                        top_pos = pos_dep_joints[joint][rep_dict['top']]
+                        bottom_pos = pos_dep_joints[joint][rep_dict['bottom']]
 
-                    if squat_rules[joint]['min'] <= top_pos:
-                        valid_top = True
-                        if 'valid' in good_reps[rep_dict['rep']]:
-                            valid_top = False if good_reps[rep_dict['rep']]['valid'] == False else True
-                    else:
-                        valid_top = False
-                    
-                    advice_top = {} if valid_top else {
-                        f'{joint}_top': {
-                            'position': 'top',
-                            'angle': top_pos,
-                            'expected': squat_rules[joint]['min']
-                        },
-                        **(good_reps[rep_dict['rep']]['advice'] if 'advice' in good_reps[rep_dict['rep']] else {})
-                    }
+                        if self.ruleset[joint]['min'] <= top_pos:
+                            valid_top = True
+                            if 'valid' in good_reps[rep_dict['rep']]:
+                                valid_top = False if good_reps[rep_dict['rep']]['valid'] == False else True
+                        else:
+                            valid_top = False
+                        
+                        advice_top = {} if valid_top else {
+                            f'{joint}_top': {
+                                'position': 'top',
+                                'angle': top_pos,
+                                'expected': self.ruleset[joint]['min']
+                            },
+                            **(good_reps[rep_dict['rep']]['advice'] if 'advice' in good_reps[rep_dict['rep']] else {})
+                        }
+                        good_reps[rep_dict['rep']] = {
+                            'valid': valid_top,
+                            'advice': advice_top
+                        }
+                        
+                        if abs(self.ruleset[joint]['max'] - bottom_pos) <= 7:
+                            valid_bottom = True
+                            if 'valid' in good_reps[rep_dict['rep']]:
+                                valid_bottom = False if good_reps[rep_dict['rep']]['valid'] == False else True
+                        else:
+                            valid_bottom = False
+                        
+                        advice_bottom = {} if valid_bottom else {
+                            f'{joint}_bottom': {
+                                'position': 'bottom',
+                                'angle': bottom_pos,
+                                'expected': self.ruleset[joint]['max']
+                            },
+                            **(good_reps[rep_dict['rep']]['advice'] if 'advice' in good_reps[rep_dict['rep']] else {})
+                        }
+                        good_reps[rep_dict['rep']] = {
+                            'valid': valid_bottom,
+                            'advice': advice_bottom
+                        }
+                else:
                     good_reps[rep_dict['rep']] = {
-                        'valid': valid_top,
-                        'advice': advice_top
-                    }
-                    
-                    if abs(squat_rules[joint]['max'] - bottom_pos) <= 7:
-                        valid_bottom = True
-                        if 'valid' in good_reps[rep_dict['rep']]:
-                            valid_bottom = False if good_reps[rep_dict['rep']]['valid'] == False else True
-                    else:
-                        valid_bottom = False
-                    
-                    advice_bottom = {} if valid_bottom else {
-                        f'{joint}_bottom': {
-                            'position': 'bottom',
-                            'angle': bottom_pos,
-                            'expected': squat_rules[joint]['max']
-                        },
-                        **(good_reps[rep_dict['rep']]['advice'] if 'advice' in good_reps[rep_dict['rep']] else {})
-                    }
-                    good_reps[rep_dict['rep']] = {
-                        'valid': valid_bottom,
-                        'advice': advice_bottom
+                        'valid': True,
+                        'advice': {}
                     }
             
         
@@ -173,14 +193,15 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
                 joints_history[joint].append(kpt_frame['joint_angles'][joint])
         
         start_points, end_points = self.get_rep_points(joints_history)
-        rep_extremas = self.reparameterise_rep_points(start_points, end_points)
-        self.validate_reps_squat(
-            rep_extremas,
-            {
+        
+        if len(end_points) > 0:
+            rep_extremas = self.reparameterise_rep_points(start_points, end_points)
+            pos_dependents = {
                 "hip_left": joints_history["hip_left"],
                 "hip_right": joints_history["hip_right"]
-            }
-        )
+            } if self.is_squat else {}
+
+            self.validate_reps_squat(rep_extremas, pos_dependents, joints_history)
 
         for joint_name in joints_history:
             plt.figure()
@@ -193,35 +214,37 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
             plt.figure().set_figwidth(12)
             plt.plot(joint_sma_y, label=joint_name)
 
-            if joint_name in squat_rules:
-                if 'max' in squat_rules[joint_name]:
+            if joint_name in self.ruleset:
+                if 'max' in self.ruleset[joint_name]:
                     plt.axhline(
-                        y=squat_rules[joint_name]['max'],
+                        y=self.ruleset[joint_name]['max'],
                         color='g',
                         linestyle='--',
-                        label=f'max={squat_rules[joint_name]["max"]}'
+                        label=f'max={self.ruleset[joint_name]["max"]}'
                     )
                 
-                if 'min' in squat_rules[joint_name]:
+                if 'min' in self.ruleset[joint_name]:
                     plt.axhline(
-                        y=squat_rules[joint_name]['min'],
+                        y=self.ruleset[joint_name]['min'],
                         color='r',
                         linestyle='--',
-                        label=f'min={squat_rules[joint_name]["min"]}'
+                        label=f'min={self.ruleset[joint_name]["min"]}'
                     )
-
-            plt.scatter(
-                np.array(end_points),
-                np.array(joint_sma_y)[np.array(end_points)],
-                color='red', 
-                label='Rep. bottom'
-            )
-            plt.scatter(
-                np.array(start_points),
-                np.array(joint_sma_y)[np.array(start_points)],
-                color='green', 
-                label='Rep. top'
-            )
+            
+            if len(end_points) > 0:
+                plt.scatter(
+                    np.array(end_points),
+                    np.array(joint_sma_y)[np.array(end_points)],
+                    color='red', 
+                    label='Rep. bottom'
+                )
+            if len(start_points) > 0:
+                plt.scatter(
+                    np.array(start_points),
+                    np.array(joint_sma_y)[np.array(start_points)],
+                    color='green', 
+                    label='Rep. top'
+                )
 
             plt.xlabel('Frame Index')
             plt.ylabel('Angle (degrees)')
