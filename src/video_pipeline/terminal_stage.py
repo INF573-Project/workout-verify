@@ -2,7 +2,6 @@
 from pypipeline.stages import ITerminalStage
 from matplotlib import pyplot as plt
 from pathlib import Path
-from scipy.signal import argrelextrema
 import numpy as np
 from collections import defaultdict
 from typing import Tuple, List
@@ -13,7 +12,6 @@ import json
 from .schemas.data_terminal_stage import DataStageTerminal
 from .schemas.data_stage_joints import DataStageJoints
 from src.utils.workout_rules import squat_rules, pullup_rules
-from src.utils.workout_rules import squat_cyclic_pair, pullup_cyclic_pair
 
 
 class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
@@ -21,9 +19,7 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
     def __init__(self) -> None:
         super().__init__()
         self.is_squat = True
-
         self.ruleset = squat_rules if self.is_squat else pullup_rules
-        self.cyclic_pair = squat_cyclic_pair if self.is_squat else pullup_cyclic_pair
 
     def simple_moving_average(self, data, window_size):
         if window_size <= 0:
@@ -55,13 +51,38 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
         return groups
     
 
+    def get_cyclic_joints(self) -> list:
+        cyclic_joints = []
+
+        for joint in self.ruleset:
+            if self.ruleset[joint]["cyclic_joint"]:
+                cyclic_joints.append(joint)
+        
+        return cyclic_joints
+
+
+    def get_delta_thresholding_joints(self) -> list:
+        delta_joints = []
+
+        for joint in self.ruleset:
+            if self.ruleset[joint]["type"] == "delta_thresholding":
+                delta_joints.append(joint)
+        
+        return delta_joints
+
+
     def get_rep_points(self, joints_history: dict) -> dict:
-        kr = np.array(self.simple_moving_average(joints_history[self.cyclic_pair[0]], 10))
-        kl = np.array(self.simple_moving_average(joints_history[self.cyclic_pair[1]], 10))
+        cyclic_pair = self.get_cyclic_joints()
+        if len(cyclic_pair) != 2:
+            raise ValueError(f"""There should be exactly two cyclic joints defined in the ruleset
+                             for a movement, found the following: {cyclic_pair}""")
+
+        kr = np.array(self.simple_moving_average(joints_history[cyclic_pair[0]], 10))
+        kl = np.array(self.simple_moving_average(joints_history[cyclic_pair[1]], 10))
 
         knee_history = (kr + kl) / 2
-        maximas = np.argwhere(knee_history >= self.ruleset[self.cyclic_pair[0]]["max"])
-        minimas = np.argwhere(knee_history <= self.ruleset[self.cyclic_pair[1]]["min"])
+        maximas = np.argwhere(knee_history >= self.ruleset[cyclic_pair[0]]["args"]["max"])
+        minimas = np.argwhere(knee_history <= self.ruleset[cyclic_pair[1]]["args"]["min"])
 
         starting_points = []
         end_points = []
@@ -101,6 +122,84 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
             reps.append({"rep": i, "top": point, "bottom": next_bottom})
 
         return reps
+
+
+    def validate_thresholding(self, joint: str, joints_history: dict, rep_dict: dict, good_reps: defaultdict) -> defaultdict:
+        top_pos = joints_history[joint][rep_dict['top']]
+        bottom_pos = joints_history[joint][rep_dict['bottom']]
+
+        if self.ruleset[joint]["args"]['min'] >= top_pos:
+            valid_top = True
+            if 'valid' in good_reps[rep_dict['rep']]:
+                valid_top = False if good_reps[rep_dict['rep']]['valid'] == False else True
+        else:
+            valid_top = False
+        
+        advice_top = {} if valid_top else {
+            f'{joint}_top': {
+                'position': 'top',
+                'angle': top_pos,
+                'expected': self.ruleset[joint]["args"]['min']
+            },
+            **(good_reps[rep_dict['rep']]['advice'] if 'advice' in good_reps[rep_dict['rep']] else {})
+        }
+        good_reps[rep_dict['rep']] = {
+            'valid': valid_top,
+            'advice': advice_top
+        }
+        
+        if abs(self.ruleset[joint]["args"]['max'] - bottom_pos) <= 10:
+            valid_bottom = True
+            if 'valid' in good_reps[rep_dict['rep']]:
+                valid_bottom = False if good_reps[rep_dict['rep']]['valid'] == False else True
+        else:
+            valid_bottom = False
+        
+        advice_bottom = {} if valid_bottom else {
+            f'{joint}_bottom': {
+                'position': 'bottom',
+                'angle': bottom_pos,
+                'expected': self.ruleset[joint]["args"]['max']
+            },
+            **(good_reps[rep_dict['rep']]['advice'] if 'advice' in good_reps[rep_dict['rep']] else {})
+        }
+        good_reps[rep_dict['rep']] = {
+            'valid': valid_bottom,
+            'advice': advice_bottom
+        }
+
+        return good_reps
+    
+    
+    def validate_delta_thresholding(self, joint: str, joints_history: dict, rep_dict: dict, good_reps: defaultdict) -> defaultdict:
+        deltas = []
+
+        for i, angle in enumerate(joints_history[joint]):
+            if i == 0: continue
+            deltas.append(angle - joints_history[joint][i-1])
+
+        deltas = np.array(deltas)
+        above_max = np.argwhere(deltas > self.ruleset[joint]["args"]["max"])
+        above_min = np.argwhere(deltas < self.ruleset[joint]["args"]["min"])
+
+        if len(above_max) > 0 or len(above_min) > 0:
+            good_reps[rep_dict['rep']] = {
+                "valid": False,
+                "advice": {
+                    joint: {
+                        "expected": "Low variation in leg momentum",
+                        "actual": "Exceeded delta threshold"
+                    }
+                }
+            }
+        else:
+            good_reps[rep_dict['rep']] = {
+                "valid": True,
+                "advice": {}
+            }
+
+        return good_reps
+
     
     def validate_reps_squat(self, cyclic_extremas: List[dict], pos_dep_joints: dict, joints_history: dict):
         good_reps = defaultdict(dict)
@@ -112,7 +211,7 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
                         'valid': False,
                         'advice': {
                             'knees_bottom': {
-                                'expected': self.ruleset["knee_right"]["min"]
+                                'expected': self.ruleset["knee_right"]["args"]["min"]
                             }
                         }
                     }
@@ -121,62 +220,23 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
                         'valid': False,
                         'advice': {
                             'elbows_top': {
-                                'expected': self.ruleset["elbow_right"]["min"]
+                                'expected': self.ruleset["elbow_right"]["args"]["min"]
                             }
                         }
                     }
             else:
                 if len(pos_dep_joints) > 0:
                     for joint in pos_dep_joints:
-                        top_pos = pos_dep_joints[joint][rep_dict['top']]
-                        bottom_pos = pos_dep_joints[joint][rep_dict['bottom']]
-
-                        if self.ruleset[joint]['min'] <= top_pos:
-                            valid_top = True
-                            if 'valid' in good_reps[rep_dict['rep']]:
-                                valid_top = False if good_reps[rep_dict['rep']]['valid'] == False else True
-                        else:
-                            valid_top = False
-                        
-                        advice_top = {} if valid_top else {
-                            f'{joint}_top': {
-                                'position': 'top',
-                                'angle': top_pos,
-                                'expected': self.ruleset[joint]['min']
-                            },
-                            **(good_reps[rep_dict['rep']]['advice'] if 'advice' in good_reps[rep_dict['rep']] else {})
-                        }
-                        good_reps[rep_dict['rep']] = {
-                            'valid': valid_top,
-                            'advice': advice_top
-                        }
-                        
-                        if abs(self.ruleset[joint]['max'] - bottom_pos) <= 7:
-                            valid_bottom = True
-                            if 'valid' in good_reps[rep_dict['rep']]:
-                                valid_bottom = False if good_reps[rep_dict['rep']]['valid'] == False else True
-                        else:
-                            valid_bottom = False
-                        
-                        advice_bottom = {} if valid_bottom else {
-                            f'{joint}_bottom': {
-                                'position': 'bottom',
-                                'angle': bottom_pos,
-                                'expected': self.ruleset[joint]['max']
-                            },
-                            **(good_reps[rep_dict['rep']]['advice'] if 'advice' in good_reps[rep_dict['rep']] else {})
-                        }
-                        good_reps[rep_dict['rep']] = {
-                            'valid': valid_bottom,
-                            'advice': advice_bottom
-                        }
+                        if self.ruleset[joint]["type"] == "thresholding":
+                            good_reps = self.validate_thresholding(joint, joints_history, rep_dict, good_reps)
+                        if self.ruleset[joint]["type"] == "delta_thresholding":
+                            good_reps = self.validate_delta_thresholding(joint, joints_history, rep_dict, good_reps)
                 else:
                     good_reps[rep_dict['rep']] = {
                         'valid': True,
                         'advice': {}
                     }
             
-        
         print(f"\n[bold magenta] You performed the following reps correctly:\n{json.dumps(dict(good_reps), indent=4)}")
 
 
@@ -199,7 +259,10 @@ class TerminalStage(ITerminalStage[DataStageJoints, DataStageTerminal]):
             pos_dependents = {
                 "hip_left": joints_history["hip_left"],
                 "hip_right": joints_history["hip_right"]
-            } if self.is_squat else {}
+            } if self.is_squat else {
+                "knee_left": joints_history["knee_left"],
+                "knee_right": joints_history["knee_right"]
+            }
 
             self.validate_reps_squat(rep_extremas, pos_dependents, joints_history)
 
