@@ -138,10 +138,10 @@ class ForwardStageInference(IForwardStage[DataStageOutputLoad, DataStageInferenc
 
         # build pose estimator
         pose_estimator = init_pose_estimator(
-        args['pose_config'],
-        args['pose_checkpoint'],
-        device=args['device'],
-        cfg_options=dict(model=dict(test_cfg=dict(output_heatmaps=False))))
+            args['pose_config'],
+            args['pose_checkpoint'],
+            device=args['device'],
+            cfg_options=dict(model=dict(test_cfg=dict(output_heatmaps=False))))
 
         # build visualizer
         pose_estimator.cfg.visualizer.radius = 3
