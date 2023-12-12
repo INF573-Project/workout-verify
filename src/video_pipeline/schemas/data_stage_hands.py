@@ -5,6 +5,6 @@ from typing import List
 
 
 @dataclass
-class DataStagehands(BaseSchema):
+class DataStagHands(BaseSchema):
     hand_kpts_detailed: List[dict] = field_persistance()
-    video_output_path: str = field_persistance()
+    hand_video_output_path: str = field_persistance()

@@ -6,5 +6,5 @@ from typing import List
 
 @dataclass
 class DataStageJoints(BaseSchema):
-    kpts_detailed: List[dict] = field_persistance()
-    video_output_path: str = field_persistance()
+    joints_kpts_detailed: List[dict] = field_persistance()
+    joints_video_output_path: str = field_persistance()

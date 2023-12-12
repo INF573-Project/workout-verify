@@ -12,6 +12,7 @@ import json
 # Local imports
 from .schemas.data_terminal_stage import DataStageTerminal
 from .schemas.data_stage_joints import DataStageJoints
+from .schemas.data_stage_hands import DataStagehands
 from src.utils.workout_rules import squat_rules
 
 

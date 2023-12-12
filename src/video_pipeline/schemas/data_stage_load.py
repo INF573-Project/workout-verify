@@ -6,11 +6,13 @@ from dataclasses import dataclass
 @dataclass
 class DataStageLoad(BaseSchema):
     video_path: str = field_persistance()
-    video_output_path: str = field_persistance()
+    hand_video_output_path: str = field_perishable()
+    joints_video_output_path: str = field_persistance()
     video_skeleton_path: str = field_persistance()
 
 @dataclass
 class DataStageOutputLoad(BaseSchema):
     video_path: str = field_perishable()
-    video_output_path: str = field_persistance()
+    hand_video_output_path: str = field_perishable()
+    joints_video_output_path: str = field_persistance()
     video_skeleton_path: str = field_persistance()
