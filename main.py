@@ -38,4 +38,5 @@ if __name__ == '__main__':
     }
     input_data = DataStageLoad(**data)
     controller = BaseController(input_data, InitStageLoad)
+    controller.discover()
     output = controller.start()

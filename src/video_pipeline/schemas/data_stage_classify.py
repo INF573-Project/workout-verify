@@ -5,8 +5,9 @@ from typing import List
 
 
 @dataclass
-class DataStageJoints(BaseSchema):
+class DataStageClassify(BaseSchema):
     kpts_detailed: List[dict] = field_persistance()
     hand_kpts_detailed: List[dict] = field_persistance()
+    workouts: List[dict] = field_persistance()
     video_output_path: str = field_persistance()
     video_path: str = field_persistance()
