@@ -6,12 +6,12 @@ import numpy as np
 import copy
 
 # Local imports
-from .terminal_stage import TerminalStage
+from .forward_stage_classify import ForwardStageClassify
 from .schemas.data_stage_inference import DataStageInference
 from .schemas.data_stage_joints import DataStageJoints
 
 
-class ForwardStageJoints(IForwardStage[DataStageInference, DataStageJoints, TerminalStage]):
+class ForwardStageJoints(IForwardStage[DataStageInference, DataStageJoints, ForwardStageClassify]):
 
     def __init__(self) -> None:
         super().__init__()
@@ -195,5 +195,5 @@ class ForwardStageJoints(IForwardStage[DataStageInference, DataStageJoints, Term
         }
 
 
-    def get_output(self) -> Tuple[TerminalStage, DataStageJoints]:
-        return TerminalStage(), DataStageJoints(**self._output)
+    def get_output(self) -> Tuple[ForwardStageClassify, DataStageJoints]:
+        return ForwardStageClassify(), DataStageJoints(**self._output)

@@ -11,6 +11,6 @@ class DataStageLoad(BaseSchema):
 
 @dataclass
 class DataStageOutputLoad(BaseSchema):
-    video_path: str = field_perishable()
+    video_path: str = field_persistance()
     video_output_path: str = field_persistance()
     video_skeleton_path: str = field_persistance()

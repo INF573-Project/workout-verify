@@ -6,12 +6,12 @@ import numpy as np
 import copy
 
 # Local imports
-from .terminal_stage import TerminalStage
+from .forward_stage_joints import ForwardStageJoints
 from .schemas.data_stage_inference import DataStageInference
-from .schemas.data_stage_joints import DataStageJoints
+from .schemas.data_stage_hands import DataStageHands
 
 
-class ForwardStagehands(IForwardStage[DataStageInference, DataStageJoints, TerminalStage]):
+class ForwardStagehands(IForwardStage[DataStageInference, DataStageHands, ForwardStageJoints]):
 
     def __init__(self) -> None:
         super().__init__()
@@ -51,30 +51,29 @@ class ForwardStagehands(IForwardStage[DataStageInference, DataStageJoints, Termi
 
         return kpts_dict
 
-
-    def compute(self) -> None:
-        kpts_detailed = []
-
-        for kpts in self.input.keypoints:
-            kpts = np.array(kpts)
-            kpts_dict = self.convert_to_dictionary(kpts)
-            kpts_dict = self.compute_joint_angles(self.skeletal_structure, kpts_dict)
-
-            kpts_detailed.append(kpts_dict)
-
-        self._output = {
-            "kpts_detailed": kpts_detailed,
-            **self.input.get_carry()
-        }
-
-    def count_digits(kpt: np.array)-> int:
-        tips = kpt[[8, 12, 16, 20]] # 4 is thumb, we'll ignore for now
-        mean_knuckle = np.mean(kpt[[17, 13, 9, 5]], axis=0)
+    def count_digits(hand_kpt: np.array)-> int:
+        tips = hand_kpt[[8, 12, 16, 20]] # 4 is thumb, we'll ignore for now
+        mean_knuckle = np.mean(hand_kpt[[17, 13, 9, 5]], axis=0)
         raised_digits = 0
         for pt in tips:
             if pt[1] < mean_knuckle[1]:
                 raised_digits += 1
         return raised_digits
 
-    def get_output(self) -> Tuple[TerminalStage, DataStageJoints]:
-        return TerminalStage(), DataStageJoints(**self._output)
+    def compute(self) -> None:
+        hand_kpts_detailed = []
+
+        for kpts in self.input.keypoints_hands:
+            kpts = np.array(kpts)
+            kpts_dict = self.convert_to_dictionary(kpts)
+            kpts_dict['digits_up'] = self.count_digits(kpts)
+
+            hand_kpts_detailed.append(kpts_dict)
+
+        self._output = {
+            "hand_kpts_detailed": hand_kpts_detailed,
+            **self.input.get_carry()
+        }
+
+    def get_output(self) -> Tuple[ForwardStageJoints, DataStageHands]:
+        return ForwardStageJoints(), DataStageHands(**self._output)
