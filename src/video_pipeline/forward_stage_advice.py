@@ -115,9 +115,25 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
                 reps.append({"rep": i, "top": point})
                 continue
                 
-            reps.append({"rep": i, "top": point, "bottom": next_bottom})
+            reps.append({"rep": i, "top": point, "bottom": next_bottom, "invalidated": False})
 
         return reps
+    
+
+    def validate_chin_pos(self, rep_extremas: List[dict]) -> List[dict]:
+        filtered_extremas = []
+        
+        for extrema in rep_extremas:
+            if "bottom" in extrema:
+                chin_top_z = self.input.kpts_detailed[extrema["top"]]["head_high"][2]
+                handr_top_z = self.input.kpts_detailed[extrema["top"]]["hand_right"][2]
+                handl_top_z = self.input.kpts_detailed[extrema["top"]]["hand_left"][2]
+                hand_top_z = (handr_top_z + handl_top_z) / 2
+                
+                extrema["invalidated"] = (hand_top_z - chin_top_z) < 0
+                filtered_extremas.append(extrema)
+        
+        return filtered_extremas
 
 
     def validate_thresholding(self, joint: str, joints_history: dict, rep_dict: dict, good_reps: defaultdict) -> defaultdict:
@@ -220,6 +236,15 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
                             }
                         }
                     }
+            elif rep_dict["invalidated"]:
+                good_reps[rep_dict['rep']] = {
+                    'valid': False,
+                    'advice': {
+                        'knees_bottom': {
+                            'expected': "Head above hand at top"
+                        }
+                    }
+                }
             else:
                 if len(pos_dep_joints) > 0:
                     for joint in pos_dep_joints:
@@ -256,6 +281,10 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
             
             if len(end_points) > 0:
                 rep_extremas = self.reparameterise_rep_points(start_points, end_points)
+                
+                if workout["type"] == "pullup":
+                    rep_extremas = self.validate_chin_pos(rep_extremas)
+
                 pos_dependents = {
                     "hip_left": joints_history["hip_left"],
                     "hip_right": joints_history["hip_right"]

@@ -166,3 +166,4 @@ poetry.lock
 mmpose/
 inspiration/
 data/examples/*.MOV
+data/output/*/*.png
