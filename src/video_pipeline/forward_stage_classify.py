@@ -5,7 +5,7 @@ from typing import Tuple, List
 import numpy as np
 
 # Local imports
-from .terminal_stage import TerminalStage
+from .forward_stage_advice import ForwardStageAdvice
 from .schemas.data_stage_joints import DataStageJoints
 from .schemas.data_stage_classify import DataStageClassify
 
@@ -13,7 +13,7 @@ from src.models.workout_classifier import WorkoutClassifier
 from src.utils.joint_features import JointFeatures
 
 
-class ForwardStageClassify(IForwardStage[DataStageJoints, DataStageClassify, TerminalStage]):
+class ForwardStageClassify(IForwardStage[DataStageJoints, DataStageClassify, ForwardStageAdvice]):
 
     def __init__(self) -> None:
         super().__init__()
@@ -104,5 +104,5 @@ class ForwardStageClassify(IForwardStage[DataStageJoints, DataStageClassify, Ter
         }
 
 
-    def get_output(self) -> Tuple[TerminalStage, DataStageClassify]:
-        return TerminalStage(), DataStageClassify(**self._output)
+    def get_output(self) -> Tuple[ForwardStageAdvice, DataStageClassify]:
+        return ForwardStageAdvice(), DataStageClassify(**self._output)

@@ -11,3 +11,6 @@ class DataStageTerminal(BaseSchema):
     workouts: List[dict] = field_perishable()
     video_output_path: str = field_perishable()
     video_path: str = field_perishable()
+    joints_history: dict = field_persistance()
+    workout_advice: List[dict] = field_persistance()
+    file_name: str = field_persistance()

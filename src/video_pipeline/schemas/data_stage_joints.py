@@ -10,3 +10,4 @@ class DataStageJoints(BaseSchema):
     hand_kpts_detailed: List[dict] = field_persistance()
     video_output_path: str = field_persistance()
     video_path: str = field_persistance()
+    file_name: str = field_persistance()

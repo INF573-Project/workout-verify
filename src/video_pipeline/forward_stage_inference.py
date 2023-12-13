@@ -7,6 +7,7 @@ import threading
 from pathlib import Path
 import cv2
 import pickle
+from os.path import isfile
 
 # Local imports
 from .forward_stage_joints import ForwardStageJoints
@@ -66,9 +67,10 @@ class ForwardStageInference(IForwardStage[DataStageOutputLoad, DataStageInferenc
         return final_result
 
     def compute(self) -> None:
-        cached = True
+        kpts_joints_path = Path("./cache/") / f'{self.input.file_name}_ktps_joints.pickle'
+        kpts_hands_path = Path("./cache/") / f'{self.input.file_name}_ktps_hands.pickle'
 
-        if not cached:
+        if not isfile(kpts_joints_path) or not isfile(kpts_hands_path):
             output_skeleton = self.input.video_skeleton_path
             Path(output_skeleton).mkdir(parents=True, exist_ok=True)
             
@@ -81,15 +83,15 @@ class ForwardStageInference(IForwardStage[DataStageOutputLoad, DataStageInferenc
             for result in results_joints:
                     kpts_joints.append(result['predictions'][0][0]['keypoints'])
             
-            with open('kpts_joints.pickle', 'wb') as f:
+            with open(kpts_joints_path, 'wb') as f:
                 pickle.dump(kpts_joints, f, protocol=pickle.HIGHEST_PROTOCOL)
-            with open('kpts_hands.pickle', 'wb') as f:
+            with open(kpts_hands_path, 'wb') as f:
                 pickle.dump(kpts_hands, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         else:
-            with open('kpts_joints.pickle', 'rb') as f:
+            with open(kpts_joints_path, 'rb') as f:
                 kpts_joints = pickle.load(f)
-            with open('kpts_hands.pickle', 'rb') as f:
+            with open(kpts_hands_path, 'rb') as f:
                 kpts_hands = pickle.load(f)
         
         kpts_joints = [np.array(x) for x in kpts_joints]

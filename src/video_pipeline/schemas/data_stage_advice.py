@@ -5,10 +5,12 @@ from typing import List
 
 
 @dataclass
-class DataStageClassify(BaseSchema):
+class DataStageAdvice(BaseSchema):
     file_name: str = field_persistance()
     kpts_detailed: List[dict] = field_persistance()
     hand_kpts_detailed: List[dict] = field_persistance()
     workouts: List[dict] = field_persistance()
     video_output_path: str = field_persistance()
     video_path: str = field_persistance()
+    joints_history: dict = field_persistance()
+    workout_advice: List[dict] = field_persistance()
