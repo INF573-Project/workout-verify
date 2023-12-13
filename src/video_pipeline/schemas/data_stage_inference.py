@@ -7,6 +7,7 @@ import numpy as np
 @dataclass
 class DataStageInference(BaseSchema):
     keypoints: np.ndarray = field_persistance()
+    file_name: str = field_persistance()
     video_output_path: str = field_persistance()
     video_skeleton_path: str = field_persistance()
     keypoints_hands: np.ndarray = field_persistance()
