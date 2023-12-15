@@ -29,6 +29,12 @@ After running the above setup, you should be able to simply provide an input vid
 $ poetry run python main.py --input_video <path_to_video>
 ```
 
+If you want to run based on a cached sequence of skeletons then you can simply run this command, and refer to a specific pickle file which you want to test.
+
+```Bash
+$ poetry run python main.py --input_video cache/<video_name>.pickle
+```
+
 ## Issues & Contact
 
 If you experience any issues when running this project, feel free to contact us:
