@@ -51,7 +51,7 @@ class ForwardStagehands(IForwardStage[DataStageInference, DataStageHands, Forwar
 
         return kpts_dict
 
-    def count_digits(hand_kpt: np.array)-> int:
+    def count_digits(self, hand_kpt: np.array)-> int:
         tips = hand_kpt[[8, 12, 16, 20]] # 4 is thumb, we'll ignore for now
         mean_knuckle = np.mean(hand_kpt[[17, 13, 9, 5]], axis=0)
         raised_digits = 0

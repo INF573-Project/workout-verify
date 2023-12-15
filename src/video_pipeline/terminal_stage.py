@@ -30,7 +30,6 @@ class TerminalStage(ITerminalStage[DataStageAdvice, DataStageTerminal]):
                 joint_y = joints_history[joint_name]
                 joint_sma_y = np.array(simple_moving_average(joint_y, window_size))
 
-                # Plot joint angles
                 plt.subplot()
                 plt.figure().set_figwidth(12)
                 plt.plot(joint_sma_y, label=joint_name)
@@ -44,7 +43,6 @@ class TerminalStage(ITerminalStage[DataStageAdvice, DataStageTerminal]):
                     ncol=7
                 )
 
-                # Save the plot
                 plt.tight_layout()
                 output_path = Path(self.input.video_output_path) / f'{joint_name}_plot.png'
                 plt.savefig(output_path)
@@ -57,19 +55,11 @@ class TerminalStage(ITerminalStage[DataStageAdvice, DataStageTerminal]):
 
         num_joints = len(data.keys())
 
-        # Calculate the number of columns needed
         num_cols = 2
-        num_rows = (num_joints + 1) // num_cols + min(1, (num_joints + 1) % num_cols)
+        num_rows = num_joints // num_cols + 1
 
-        # Create a figure and subplots for each joint and video
         fig, axs = plt.subplots(num_rows, num_cols, figsize=(12, 4 * num_rows))
-
-        # Flatten the axes array for easy iteration
         axs = axs.flatten()
-
-        # Remove any extra subplot at the end
-        if len(axs) > num_joints + 1:
-            fig.delaxes(axs[-1])
 
         # Create lines to hold joint plots
         lines = [ax.plot([], [])[0] for ax in axs[:num_joints]]
@@ -79,31 +69,35 @@ class TerminalStage(ITerminalStage[DataStageAdvice, DataStageTerminal]):
             for interval in intervals.get(joint_name, []):
                 start, end = interval
                 if 0 <= start < len(joint_data) and 0 <= end < len(joint_data):
-                    rect = plt.Rectangle((start, 0), end - start, max(joint_data) * 1.1, color='red', alpha=0.3)
+                    rect = plt.Rectangle((start, min(joint_data)-10), end - start, 180, color='red', alpha=0.3)
                     axs[i].add_patch(rect)
+
+        for i, joint_name in enumerate(data.keys()):
+            axs[i].set_title(" ".join([word.capitalize() for word in joint_name.split("_")]))
 
         # Iterate over each joint
         def update(frame):
-            for i, (joint_name, joint_data) in enumerate(data.items()):
+            for i, (_, joint_data) in enumerate(data.items()):
                 # Set axis limits for the joint subplot
                 axs[i].set_xlim(0, len(joint_data))
-                axs[i].set_ylim(0, max(joint_data) * 1.1)
+
+                axs[i].set_ylim(min(joint_data) - 10, max(joint_data) + 10)
 
                 x = np.arange(len(joint_data[:frame]))
                 y = joint_data[:frame]
                 lines[i].set_data(x, y)
 
             # Update the video subplot
-            ret, frame_img = cap.read()
-            if ret:
-                axs[-1].clear()
-                axs[-1].imshow(cv2.cvtColor(frame_img, cv2.COLOR_BGR2RGB))
-                axs[-1].axis('off')
+            # ret, frame_img = cap.read()
+            # if ret:
+            #     axs[-1].clear()
+            #     axs[-1].imshow(cv2.cvtColor(frame_img, cv2.COLOR_BGR2RGB))
+            #     axs[-1].axis('off')
 
             return lines + [axs[-1]]
 
         # Create the animated plot
-        ani = animation.FuncAnimation(fig, update, frames=len(next(iter(data.values()))), interval=1000 / fps, blit=True)
+        ani = animation.FuncAnimation(fig, update, frames=len(list(data.values())[0].tolist()), interval=1000 / fps, blit=True)
         ani.save("animates_plot.mp4", fps=fps, extra_args=['-vcodec', 'libx264'])
     
 
@@ -112,15 +106,35 @@ class TerminalStage(ITerminalStage[DataStageAdvice, DataStageTerminal]):
         output_folder = self.input.video_output_path
         Path(output_folder).mkdir(parents=True, exist_ok=True)
 
-        print(self.input.workout_advice)
+        joints_history = self.input.joints_history
         
-        # self._create_animation(
-        # {
-        #     key: self.input.joints_history[key] for key in ["knee_right", "knee_left", "hip_left", "hip_right"]
-        # }, {
-        #     'hip_right': [(100, 150), (300, 350)],
-        #     'knee_left': [(50, 100), (199, 221)],
-        # })
+        knee_joints = (np.array(joints_history["knee_right"]) + np.array(joints_history["knee_left"])) / 2
+        hip_joints = (np.array(joints_history["hip_right"]) + np.array(joints_history["hip_left"])) / 2
+        elbow_joints = (np.array(joints_history["elbow_right"]) + np.array(joints_history["elbow_left"])) / 2
+        direct_plots = ["spine_middle"]
+
+        markers = []
+
+        for advice in self.input.workout_advice[0]['advice']:
+            if not self.input.workout_advice[0]['advice'][advice]['valid']:
+                rep_dict = self.input.workout_rep_extrema['squat'][0][advice]
+                start = rep_dict["top"]
+                end = start + 50
+
+                if 'bottom' in rep_dict:
+                    end = rep_dict["bottom"]
+                
+                markers.append((start, end))
+
+        self._create_animation(
+        {
+            "knee_joints": knee_joints,
+            "hip_joints": hip_joints,
+            "elbow_joints": elbow_joints,
+            **{key: self.input.joints_history[key] for key in direct_plots},
+        }, {
+            'knee_joints': markers,
+        })
         self._plot_joint_plots()
 
         self._output = self.input.get_carry()
