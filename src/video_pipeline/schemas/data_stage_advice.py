@@ -14,3 +14,4 @@ class DataStageAdvice(BaseSchema):
     video_path: str = field_persistance()
     joints_history: dict = field_persistance()
     workout_advice: List[dict] = field_persistance()
+    workout_rep_extrema: List[dict] = field_persistance()

@@ -2,7 +2,7 @@
 from pypipeline.stages import IForwardStage
 from collections import defaultdict
 from typing import Tuple, List
-import numpy as np
+from rich import print
 
 # Local imports
 from .forward_stage_advice import ForwardStageAdvice
@@ -63,7 +63,7 @@ class ForwardStageClassify(IForwardStage[DataStageJoints, DataStageClassify, For
 
 
     def _parse_sliding_windows(self, sliding_windows: List[int]) -> List[dict]:
-        workout_types = ["random", "pullup", "squat"]
+        workout_types = ["pullup", "squat"]
         groups = []
         start = 0
         current_num = sliding_windows[0]
@@ -73,8 +73,8 @@ class ForwardStageClassify(IForwardStage[DataStageJoints, DataStageClassify, For
             if sliding_windows[i] != current_num:
                 groups.append({
                     'type': workout_types[current_num],
-                    'start': start,
-                    'end': (i - 1) + joint_features.window_size
+                    'start': start * joint_features.window_size,
+                    'end': (i - 1) * joint_features.window_size
                 })
                 start = i
                 current_num = sliding_windows[i]
@@ -82,8 +82,8 @@ class ForwardStageClassify(IForwardStage[DataStageJoints, DataStageClassify, For
         # Adding the last group
         groups.append({
             'type': workout_types[current_num],
-            'start': start,
-            'end': (len(sliding_windows) - 1) + joint_features.window_size
+            'start': start * joint_features.window_size,
+            'end': (len(sliding_windows) - 1) * joint_features.window_size
         })
 
         return groups
@@ -92,11 +92,14 @@ class ForwardStageClassify(IForwardStage[DataStageJoints, DataStageClassify, For
     def compute(self) -> None:
         joints_history = self._build_joints_history()
         sliding_windows = self.classifier.predict(joints_history)
-     
+
         workouts = self._parse_sliding_windows(sliding_windows)
         workouts = self._update_times(workouts)
         workouts = self._filter_invalid(workouts)
         workouts = self._merge_consecutive(workouts)
+
+        workouts_detected = [x['type'] for x in workouts]
+        print(f"\n[bold]The following movements were classified in the video:[/bold] {' | '.join(workouts_detected)}\n")
 
         self._output = {
             "workouts": workouts,

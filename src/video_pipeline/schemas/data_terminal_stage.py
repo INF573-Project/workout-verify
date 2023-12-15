@@ -14,3 +14,4 @@ class DataStageTerminal(BaseSchema):
     joints_history: dict = field_persistance()
     workout_advice: List[dict] = field_persistance()
     file_name: str = field_persistance()
+    workout_rep_extrema: List[dict] = field_persistance()

@@ -5,9 +5,10 @@ from collections import defaultdict
 class JointFeatures:
 
   def __init__(self):
-    self.window_size = 180
+    self.window_size = 64
     self.discriminative_joints = set(
-      ["knee_right", "knee_left", "elbow_left", "elbow_right"])
+      ["knee_right", "knee_left"])
+    self.new_discriminative = set(["knee"])
   
 
   def _compute_deltas(self, joint_history: dict) -> dict:
@@ -20,11 +21,19 @@ class JointFeatures:
         joint_deltas[joint].append(angle - joint_history[joint][i-1])
     
     return joint_deltas
-  
+
 
   def _extract_features(self, joint_history: dict) -> dict:
     joint_deltas = self._compute_deltas({
       key: joint_history[key] for key in self.discriminative_joints})
+    
+    for joint in self.new_discriminative:
+      joint_deltas[joint] = (np.array(joint_history[f"{joint}_right"]) + np.array(joint_history[f"{joint}_left"])) / 2
+
+    del joint_deltas["knee_left"]
+    del joint_deltas["knee_right"]
+    # del joint_deltas["elbow_right"]
+    # del joint_deltas["elbow_left"]
     
     joint_features = defaultdict(list)
 
@@ -34,8 +43,8 @@ class JointFeatures:
 
       while j < len(joint_deltas[joint]):
         joint_features[joint].append(np.array(joint_deltas[joint])[i:j])
-        i += 1
-        j += 1
+        i += self.window_size
+        j += self.window_size
 
     return joint_features
 
@@ -43,10 +52,10 @@ class JointFeatures:
   def _build_dataset(self, joint_features: dict):
     dataset = []
 
-    for i in range(len(joint_features[list(self.discriminative_joints)[0]])):
+    for i in range(len(joint_features[list(self.new_discriminative)[0]])):
         combined_features = []
         
-        for joint in self.discriminative_joints:
+        for joint in self.new_discriminative:
             combined_features.extend(joint_features[joint][i])
 
         dataset.append(combined_features)

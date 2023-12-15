@@ -1,9 +1,7 @@
 # External imports
 from pypipeline.stages import IForwardStage
-from collections import defaultdict
 from typing import Tuple
 import numpy as np
-import copy
 
 # Local imports
 from .forward_stage_joints import ForwardStageJoints
@@ -51,7 +49,8 @@ class ForwardStagehands(IForwardStage[DataStageInference, DataStageHands, Forwar
 
         return kpts_dict
 
-    def count_digits(hand_kpt: np.array)-> int:
+
+    def count_digits(self, hand_kpt: np.array)-> int:
         tips = hand_kpt[[8, 12, 16, 20]] # 4 is thumb, we'll ignore for now
         mean_knuckle = np.mean(hand_kpt[[17, 13, 9, 5]], axis=0)
         raised_digits = 0
@@ -60,20 +59,19 @@ class ForwardStagehands(IForwardStage[DataStageInference, DataStageHands, Forwar
                 raised_digits += 1
         return raised_digits
 
+
     def compute(self) -> None:
         hand_kpts_detailed = []
 
         for kpts in self.input.keypoints_hands:
-            kpts = np.array(kpts)
-            kpts_dict = self.convert_to_dictionary(kpts)
-            kpts_dict['digits_up'] = self.count_digits(kpts)
-
-            hand_kpts_detailed.append(kpts_dict)
+            kpts = np.array(kpts[0])
+            hand_kpts_detailed.append(self.count_digits(kpts))
 
         self._output = {
             "hand_kpts_detailed": hand_kpts_detailed,
             **self.input.get_carry()
         }
+
 
     def get_output(self) -> Tuple[ForwardStageJoints, DataStageHands]:
         return ForwardStageJoints(), DataStageHands(**self._output)

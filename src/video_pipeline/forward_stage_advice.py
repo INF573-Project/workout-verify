@@ -3,6 +3,10 @@ from pypipeline.stages import IForwardStage
 from collections import defaultdict
 from typing import Tuple, List
 import numpy as np
+from pathlib import Path
+import pickle
+from rich.console import Console
+from rich.table import Table
 
 # Local imports
 from .terminal_stage import TerminalStage
@@ -140,7 +144,7 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
         top_pos = joints_history[joint][rep_dict['top']]
         bottom_pos = joints_history[joint][rep_dict['bottom']]
 
-        if self.ruleset[joint]["args"]['min'] >= top_pos:
+        if abs(self.ruleset[joint]["args"]['min'] - abs(top_pos)) <= 8:
             valid_top = True
             if 'valid' in good_reps[rep_dict['rep']]:
                 valid_top = False if good_reps[rep_dict['rep']]['valid'] == False else True
@@ -150,7 +154,7 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
         advice_top = {} if valid_top else {
             f'{joint}_top': {
                 'position': 'top',
-                'angle': top_pos,
+                'angle': abs(top_pos),
                 'expected': self.ruleset[joint]["args"]['min']
             },
             **(good_reps[rep_dict['rep']]['advice'] if 'advice' in good_reps[rep_dict['rep']] else {})
@@ -160,7 +164,7 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
             'advice': advice_top
         }
         
-        if abs(self.ruleset[joint]["args"]['max'] - bottom_pos) <= 7:
+        if abs(self.ruleset[joint]["args"]['max'] - abs(bottom_pos)) <= 8:
             valid_bottom = True
             if 'valid' in good_reps[rep_dict['rep']]:
                 valid_bottom = False if good_reps[rep_dict['rep']]['valid'] == False else True
@@ -170,7 +174,7 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
         advice_bottom = {} if valid_bottom else {
             f'{joint}_bottom': {
                 'position': 'bottom',
-                'angle': bottom_pos,
+                'angle': abs(bottom_pos),
                 'expected': self.ruleset[joint]["args"]['max']
             },
             **(good_reps[rep_dict['rep']]['advice'] if 'advice' in good_reps[rep_dict['rep']] else {})
@@ -261,11 +265,70 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
         return good_reps
     
 
+    def _pretty_print(self, advice: dict, extremas: List[dict], w_type: str) -> None:
+        table = Table(title=f"Workout Type: {w_type.capitalize()}")
+
+        table.add_column("Rep. Number", justify="right", style="cyan", no_wrap=True)
+        table.add_column("Valid Rep.", style="magenta")
+        table.add_column("Frames", style="magenta")
+        table.add_column("Advice", justify="right", style="green")
+
+        for i, rep_num in enumerate(advice):
+            frames = f"{extremas[i]['top']} - {extremas[i]['bottom']}" if 'bottom' in extremas[i] else f"{extremas[i]['top']} - _"
+            feedback = ""
+
+            for joint in advice[rep_num]['advice']:
+                if 'angle' not in advice[rep_num]['advice'][joint]:
+                    if w_type == "squat":
+                        feedback += "You did not go at parallel or beyond - go lower! \n"
+                    if w_type == "squat":
+                        feedback += "You did not go far enough to the bar - go higher! \n"
+                    continue
+    
+                actual = advice[rep_num]['advice'][joint]['angle']
+                expected = advice[rep_num]['advice'][joint]['expected']
+
+                if abs(expected - actual) > 10:
+                    feedback += f"Gap between expected ({expected}°) and actual ({actual:.0f}°) for {joint} \n"
+
+            if feedback == "": feedback = "Perfectly executed!"
+
+            table.add_row(
+                str(rep_num), 
+                str(advice[rep_num]['valid']),
+                frames,
+                feedback
+            )
+
+        console = Console()
+        console.print(table)
+    
+
     def compute(self) -> None:
         joints_history = self._build_joints_history()
         workout_advice = []
 
+        joints_history = defaultdict(list)
+
+        for kpt_frame in np.array(self.input.kpts_detailed):
+            for joint in kpt_frame['joint_angles']:
+                joints_history[joint].append(
+                    kpt_frame['joint_angles'][joint]
+                )
+        
+        joint_histories_path = Path("./cache/joint_histories") / f'{self.input.file_name}_ktps_joints.pickle'
+
+        with open(joint_histories_path, 'wb') as f:
+            pickle.dump(joints_history, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+        workout_rep_extrema = defaultdict(list)
+
+        workouts = self.input.workouts
+        workouts[-1]["end"] = len(self.input.kpts_detailed)
+
         for workout in self.input.workouts:
+            if workout["type"] == "random": continue
+            
             self.is_squat = workout["type"] == "squat"
             self.ruleset = squat_rules if self.is_squat else pullup_rules
 
@@ -278,12 +341,14 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
                     )
 
             start_points, end_points = self.get_rep_points(joints_history)
-            
+
             if len(end_points) > 0:
                 rep_extremas = self.reparameterise_rep_points(start_points, end_points)
                 
                 if workout["type"] == "pullup":
                     rep_extremas = self.validate_chin_pos(rep_extremas)
+                
+                workout_rep_extrema[workout["type"]].append(rep_extremas)
 
                 pos_dependents = {
                     "hip_left": joints_history["hip_left"],
@@ -294,15 +359,22 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
                 }
 
                 advice = self.validate_reps_squat(rep_extremas, pos_dependents, joints_history)
+
+                self._pretty_print(advice, rep_extremas, workout["type"])
+
                 workout_advice.append({
                     **workout,
                     "advice": advice
                 })
 
+        extremas_path = Path("./cache/extremas/") / f'{self.input.file_name}_extrema.pickle'
+        with open(extremas_path, 'wb') as f:
+            pickle.dump(workout_rep_extrema, f, protocol=pickle.HIGHEST_PROTOCOL)
         
         self._output = {
             "joints_history": joints_history,
             "workout_advice": workout_advice,
+            "workout_rep_extrema": workout_rep_extrema,
             **self.input.get_carry()
         }
 
