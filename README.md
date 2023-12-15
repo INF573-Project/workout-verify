@@ -32,7 +32,7 @@ $ poetry run python main.py --input_video <path_to_video>
 If you want to run based on a cached sequence of skeletons then you can simply run this command, and refer to a specific pickle file which you want to test.
 
 ```Bash
-$ poetry run python main.py --input_video cache/<video_name>.pickle
+$ poetry run python main.py --input_video cache/<video_name>.pickle # Without the _kpts_hands or _kpts_joints ending
 ```
 
 ## Issues & Contact
