@@ -73,8 +73,8 @@ class ForwardStageClassify(IForwardStage[DataStageJoints, DataStageClassify, For
             if sliding_windows[i] != current_num:
                 groups.append({
                     'type': workout_types[current_num],
-                    'start': start,
-                    'end': (i - 1) + joint_features.window_size
+                    'start': start * joint_features.window_size,
+                    'end': (i - 1) * joint_features.window_size
                 })
                 start = i
                 current_num = sliding_windows[i]
@@ -82,8 +82,8 @@ class ForwardStageClassify(IForwardStage[DataStageJoints, DataStageClassify, For
         # Adding the last group
         groups.append({
             'type': workout_types[current_num],
-            'start': start,
-            'end': (len(sliding_windows) - 1) + joint_features.window_size
+            'start': start * joint_features.window_size,
+            'end': (len(sliding_windows) - 1) * joint_features.window_size
         })
 
         return groups

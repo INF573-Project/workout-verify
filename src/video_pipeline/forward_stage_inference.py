@@ -155,6 +155,7 @@ class ForwardStageInference(IForwardStage[DataStageOutputLoad, DataStageInferenc
         video_writer = None
         pred_instances_list = []
         frame_idx = 0
+        kpts_all = []
 
         while cap.isOpened():
             # read a frame
@@ -167,7 +168,7 @@ class ForwardStageInference(IForwardStage[DataStageOutputLoad, DataStageInferenc
             # topdown pose estimation
             pred_instances = self.process_one_image(frame, detector,pose_estimator, visualizer)
             # count fingers up from keypoints
-            kpts = [np.array(pred_instances.keypoints[i]) for i in range(len(pred_instances.keypoints))]
+            kpts_all.append([np.array(pred_instances.keypoints[i]) for i in range(len(pred_instances.keypoints))])
 
             # save predictions
             pred_instances_list.append(
@@ -192,7 +193,7 @@ class ForwardStageInference(IForwardStage[DataStageOutputLoad, DataStageInferenc
                     instance_info=pred_instances_list), f, indent='\t')
             print(f"predictions have been saved at {args['pred_save_path']}")
 
-        return kpts
+        return kpts_all
     
     def compute(self) -> None:
         kpts_joints_path = Path("./cache/") / f'{self.input.file_name}_ktps_joints.pickle'

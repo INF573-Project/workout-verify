@@ -7,8 +7,8 @@ class JointFeatures:
   def __init__(self):
     self.window_size = 64
     self.discriminative_joints = set(
-      ["knee_right", "knee_left", "elbow_left", "elbow_right"])
-    self.new_discriminative = set(["knee", "elbow"])
+      ["knee_right", "knee_left"])
+    self.new_discriminative = set(["knee"])
   
 
   def _compute_deltas(self, joint_history: dict) -> dict:
@@ -32,8 +32,8 @@ class JointFeatures:
 
     del joint_deltas["knee_left"]
     del joint_deltas["knee_right"]
-    del joint_deltas["elbow_right"]
-    del joint_deltas["elbow_left"]
+    # del joint_deltas["elbow_right"]
+    # del joint_deltas["elbow_left"]
     
     joint_features = defaultdict(list)
 
@@ -43,8 +43,8 @@ class JointFeatures:
 
       while j < len(joint_deltas[joint]):
         joint_features[joint].append(np.array(joint_deltas[joint])[i:j])
-        i += 1
-        j += 1
+        i += self.window_size
+        j += self.window_size
 
     return joint_features
 

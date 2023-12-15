@@ -273,14 +273,16 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
         table.add_column("Frames", style="magenta")
         table.add_column("Advice", justify="right", style="green")
 
-        for rep_num in advice:
-            frames = f"{extremas[rep_num]['top']} - {extremas[rep_num]['bottom']}" if 'bottom' in extremas[rep_num] else f"{extremas[rep_num]['top']} - _"
-
+        for i, rep_num in enumerate(advice):
+            frames = f"{extremas[i]['top']} - {extremas[i]['bottom']}" if 'bottom' in extremas[i] else f"{extremas[i]['top']} - _"
             feedback = ""
 
             for joint in advice[rep_num]['advice']:
                 if 'angle' not in advice[rep_num]['advice'][joint]:
-                    feedback += "You did not go at parallel or beyond - go lower! \n"
+                    if w_type == "squat":
+                        feedback += "You did not go at parallel or beyond - go lower! \n"
+                    if w_type == "squat":
+                        feedback += "You did not go far enough to the bar - go higher! \n"
                     continue
     
                 actual = advice[rep_num]['advice'][joint]['angle']
@@ -321,6 +323,9 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
 
         workout_rep_extrema = defaultdict(list)
 
+        workouts = self.input.workouts
+        workouts[-1]["end"] = len(self.input.kpts_detailed)
+
         for workout in self.input.workouts:
             if workout["type"] == "random": continue
             
@@ -334,9 +339,6 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
                     joints_history[joint].append(
                         kpt_frame['joint_angles'][joint]
                     )
-
-            with open(joint_histories_path, 'wb') as f:
-                pickle.dump(joints_history, f, protocol=pickle.HIGHEST_PROTOCOL)
 
             start_points, end_points = self.get_rep_points(joints_history)
 
@@ -365,6 +367,9 @@ class ForwardStageAdvice(IForwardStage[DataStageClassify, DataStageAdvice, Termi
                     "advice": advice
                 })
 
+        extremas_path = Path("./cache/extremas/") / f'{self.input.file_name}_extrema.pickle'
+        with open(extremas_path, 'wb') as f:
+            pickle.dump(workout_rep_extrema, f, protocol=pickle.HIGHEST_PROTOCOL)
         
         self._output = {
             "joints_history": joints_history,
